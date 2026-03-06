@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.models import User
 
 
 class Course(models.Model):
@@ -37,7 +38,7 @@ class Choice(models.Model):
 
 
 class Enrollment(models.Model):
-    user = models.ForeignKey('auth.User', on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     course = models.ForeignKey(Course, on_delete=models.CASCADE)
     enrollment_date = models.DateTimeField(auto_now_add=True)
 
@@ -45,3 +46,12 @@ class Enrollment(models.Model):
 class Submission(models.Model):
     enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE)
     choices = models.ManyToManyField(Choice)
+
+    def is_get_score(self):
+        correct_choices = self.choices.filter(is_correct=True).count()
+        total_choices = self.choices.count()
+
+        if total_choices == 0:
+            return 0
+
+        return int((correct_choices / total_choices) * 100)
