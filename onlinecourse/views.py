@@ -1,64 +1,55 @@
 from django.shortcuts import render, get_object_or_404
-from .models import Course, Lesson, Question, Choice
+from .models import Course, Lesson, Enrollment, Submission, Question, Choice
 
 
-# Homepage - list all courses
 def index(request):
-    course_list = Course.objects.all()
-    return render(request, 'onlinecourse/index.html', {
-        'course_list': course_list
-    })
+    courses = Course.objects.all()
+    return render(request, 'onlinecourse/index.html', {'courses': courses})
 
 
-# Course detail page with lessons and quiz
 def course_detail(request, course_id):
-
     course = get_object_or_404(Course, pk=course_id)
-
-    lessons = Lesson.objects.filter(course=course)
-
-    questions = Question.objects.filter(lesson__course=course)
-
-    return render(request, 'onlinecourse/course_detail.html', {
-        'course': course,
-        'lessons': lessons,
-        'questions': questions
-    })
+    return render(request, 'onlinecourse/course_detail.html', {'course': course})
 
 
-# Handle quiz submission
 def submit(request, course_id):
-
     course = get_object_or_404(Course, pk=course_id)
 
-    if request.method == 'POST':
+    enrollment = Enrollment.objects.filter(
+        user=request.user,
+        course=course
+    ).first()
 
-        selected_choices = []
+    submission = Submission.objects.create(enrollment=enrollment)
 
-        for key in request.POST:
+    for key in request.POST:
+        if key.startswith('choice'):
+            choice_id = request.POST[key]
+            choice = Choice.objects.get(pk=choice_id)
+            submission.choices.add(choice)
 
-            if key == 'csrfmiddlewaretoken':
-                continue
+    submission.save()
 
-            choice_id = int(request.POST[key])
-            selected_choices.append(choice_id)
+    return show_exam_result(request, course_id, submission.id)
 
-        choices = Choice.objects.filter(id__in=selected_choices)
 
-        correct_choices = choices.filter(is_correct=True)
+def show_exam_result(request, course_id, submission_id):
 
-        if len(choices) > 0:
-            score = len(correct_choices) / len(choices) * 100
-        else:
-            score = 0
+    submission = Submission.objects.get(pk=submission_id)
 
-        questions = Question.objects.filter(lesson__course=course)
+    questions = Question.objects.filter(
+        lesson__course_id=course_id
+    )
 
-        return render(request, 'onlinecourse/result.html', {
-            'score': score,
-            'questions': questions
-        })
+    score = submission.is_get_score()
 
-    return render(request, 'onlinecourse/course_detail.html', {
-        'course': course
-    })
+    context = {
+        'questions': questions,
+        'score': score
+    }
+
+    return render(
+        request,
+        'onlinecourse/exam_result_bootstrap.html',
+        context
+    )
